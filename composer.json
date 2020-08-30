@@ -1,0 +1,17 @@
+{
+	"type": "library",
+	"name": "sainan/php-windows-hacking",
+	"description": "PHP + FFI + KERNEL32.dll",
+	"homepage": "https://github.com/Sainan/php-windows-hacking",
+	"license": "Unlicense",
+	"autoload": {
+		"psr-4": {
+			"PWH\\": "src/"
+		}
+	},
+	"require": {
+		"php": "^7.4",
+		"ext-ffi": "*",
+		"ext-json": "*"
+	}
+}
