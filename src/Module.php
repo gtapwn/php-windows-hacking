@@ -2,6 +2,7 @@
 namespace PWH;
 use FFI;
 use PWH\Handle\ProcessHandle;
+use RuntimeException;
 class Module
 {
 	public ProcessHandle $processHandle;
@@ -47,5 +48,54 @@ class Module
 	function getOffsetTo(Pointer $pointer) : int
 	{
 		return $pointer->address - $this->base->address;
+	}
+
+	function allocate(int $bytes) : AllocPointer
+	{
+		return Kernel32::VirtualAllocEx($this->processHandle, $bytes);
+	}
+
+	/**
+	 * Calls a function in the module that matches void*(*)(uint64_t, uint64_t)
+	 * However, the resulting pointer should point somewhere between the module base and (modBase + pow(2, 32)) as the method of inter process communication that is the thread exit code can only hold 32 bits.
+	 *
+	 * @param int $function_address
+	 * @param int|null $arg_1
+	 * @param int|null $arg_2
+	 * @return Pointer
+	 */
+	function callPtrFunction(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null) : Pointer
+	{
+		$ExitThread_fp = Kernel32::GetProcAddress(Kernel32::GetModuleHandleA("kernel32.dll"), "ExitThread");
+		if ($ExitThread_fp == Pointer::nullptr)
+		{
+			throw new RuntimeException("Failed to find ExitThread");
+		}
+		$dword_base = $this->base->address & 0xFFFFFFFF;
+		$asm = (new AssemblyBuilder())->beginFunction()
+									  ->beginFarCall($function_address);
+		if(is_int($arg_1))
+		{
+			$asm->setArgument1($arg_1);
+			if(is_int($arg_2))
+			{
+				$asm->setArgument2($arg_2);
+			}
+		}
+		$bytecode = $asm->endFarCall()
+						->subtractFromReturnValue($dword_base)
+						->useReturnValueAsArgument1ToNextCall()
+						->beginFarCall($ExitThread_fp)
+						->endFarCall()
+						->endFunction()
+						->getByteCode();
+		$alloc = $this->allocate(strlen($bytecode));
+		$alloc->writeString($bytecode);
+		$thread = Kernel32::CreateRemoteThread($this->processHandle, $alloc->address);
+		Kernel32::WaitForSingleObject($thread);
+		$exit_code = FFI::new("uint32_t");
+		Kernel32::GetExitCodeThread($thread, $exit_code);
+		/** @noinspection PhpUndefinedFieldInspection */
+		return $this->base->add($exit_code->cdata);
 	}
 }

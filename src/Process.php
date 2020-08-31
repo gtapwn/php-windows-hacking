@@ -46,11 +46,6 @@ class Process
 		return -1;
 	}
 
-	function allocate(int $bytes) : Pointer
-	{
-		return Kernel32::VirtualAllocEx($this->module->processHandle, $bytes);
-	}
-
 	function getModule(string $module) : Module
 	{
 		return $module == $this->module->name ? $this->module : new Module($this->module->processHandle, $module);

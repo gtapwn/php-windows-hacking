@@ -15,9 +15,9 @@ class Pointer
 	private static int $buffer_address_start = 0;
 	private static int $buffer_address_end = 0;
 
-	function __construct(ProcessHandle $processProcess, int $address)
+	function __construct(ProcessHandle $processHandle, int $address)
 	{
-		$this->processHandle = $processProcess;
+		$this->processHandle = $processHandle;
 		$this->address = $address;
 	}
 
@@ -87,7 +87,7 @@ class Pointer
 
 	function readUInt32() : int
 	{
-		return unpack("V", $this->readBinary(4))[1];
+		return unpack("L", $this->readBinary(4))[1];
 	}
 
 	function rip() : Pointer

@@ -7,6 +7,7 @@ use PWH\
 class Kernel32
 {
 	const MAX_PATH = 260;
+	const INFINITE = 0xFFFFFFFF;
 
 	const PROCESS_CREATE_PROCESS = 0x0080;
 	const PROCESS_CREATE_THREAD = 0x0002;
@@ -26,6 +27,11 @@ class Kernel32
 	const MEM_RESERVE = 0x00002000;
 	const PAGE_EXECUTE_READWRITE = 0x40;
 
+	const MEM_DECOMMIT = 0x00004000;
+	const MEM_RELEASE = 0x00008000;
+	const MEM_COALESCE_PLACEHOLDERS = 0x00000001;
+	const MEM_PRESERVE_PLACEHOLDER = 0x00000002;
+
 	const MAX_MODULE_NAME32 = 255;
 	const TH32CS_SNAPPROCESS = 0x00000002;
 	const TH32CS_SNAPMODULE = 0x00000008;
@@ -38,9 +44,14 @@ class Kernel32
 		return self::$ffi->GetLastError();
 	}
 
-	static function CloseHandle(int $handle) : void
+	/**
+	 * You don't have to call this, ObjectHandle's destructor does it for you.
+	 *
+	 * @param ObjectHandle $handle
+	 */
+	static function CloseHandle(ObjectHandle $handle) : void
 	{
-		if(self::$ffi->CloseHandle($handle) == 0)
+		if(self::$ffi->CloseHandle($handle->handle) == 0)
 		{
 			throw new Kernel32Exception("Failed to close handle");
 		}
@@ -66,14 +77,29 @@ class Kernel32
 		self::$ffi->WriteProcessMemory($processHandle->handle, $base_address, FFI::addr($buffer), $bytes, Pointer::nullptr);
 	}
 
-	static function VirtualAllocEx(ProcessHandle $processHandle, int $bytes, int $allocation_type = self::MEM_COMMIT | self::MEM_RESERVE, int $protect = self::PAGE_EXECUTE_READWRITE) : Pointer
+	static function VirtualAllocEx(ProcessHandle $processHandle, int $bytes, int $allocation_type = self::MEM_COMMIT | self::MEM_RESERVE, int $protect = self::PAGE_EXECUTE_READWRITE) : AllocPointer
 	{
-		$pointer = new Pointer($processHandle, self::$ffi->VirtualAllocEx($processHandle->handle, Pointer::nullptr, $bytes, $allocation_type, $protect));
+		$pointer = new AllocPointer($processHandle, self::$ffi->VirtualAllocEx($processHandle->handle, Pointer::nullptr, $bytes, $allocation_type, $protect), $bytes);
 		if($pointer->isNullptr())
 		{
-			throw new Kernel32Exception("VirtualAllocEx failed to allocate {$bytes} bytes");
+			throw new Kernel32Exception("Failed to allocate {$bytes} bytes");
 		}
 		return $pointer;
+	}
+
+	/**
+	 * You don't have to call this, AllocPointer's destructor does it for you.
+	 *
+	 * @param AllocPointer $allocPointer
+	 * @param int $bytes
+	 * @param int $free_type
+	 */
+	static function VirtualFreeEx(AllocPointer $allocPointer, int $bytes, int $free_type) : void
+	{
+		if(self::$ffi->VirtualFreeEx($allocPointer->processHandle->handle, $allocPointer->address, $bytes, $free_type) == 0)
+		{
+			throw new Kernel32Exception("Failed to free {$bytes} bytes at ".dechex($allocPointer->address));
+		}
 	}
 
 	static function OpenProcess(int $process_id, int $desired_access) : ProcessHandle
@@ -86,14 +112,27 @@ class Kernel32
 		return $handle;
 	}
 
-	static function CreateRemoteThread(ProcessHandle $processHandle, int $function_address, Pointer $parameter) : int
+	static function CreateRemoteThread(ProcessHandle $processHandle, int $function_address, ?Pointer $parameter = null) : Handle
 	{
-		$thread_handle = self::$ffi->CreateRemoteThread($processHandle->handle, 0, 0, $function_address, $parameter->address, 0, 0);
+		$thread_handle = self::$ffi->CreateRemoteThread($processHandle->handle, 0, 0, $function_address, $parameter->address ?? Pointer::nullptr, 0, 0);
 		if($thread_handle == 0)
 		{
 			throw new Kernel32Exception("Failed to create remote thread");
 		}
-		return $thread_handle;
+		return new Handle($thread_handle);
+	}
+
+	static function GetExitCodeThread(Handle $handle, CData $exit_code) : void
+	{
+		if(Kernel32::$ffi->GetExitCodeThread($handle->handle, FFI::addr($exit_code)) == 0)
+		{
+			throw new Kernel32Exception("Failed to get thread exit code");
+		}
+	}
+
+	static function WaitForSingleObject(Handle $handle, int $milliseconds = self::INFINITE) : int
+	{
+		return self::$ffi->WaitForSingleObject($handle->handle, $milliseconds);
 	}
 
 	static function CreateToolhelp32Snapshot(int $flags, int $process_id) : ObjectHandle
@@ -123,7 +162,7 @@ class Kernel32
 }
 
 Kernel32::$ffi = FFI::cdef(str_replace(
-["CHAR", "BOOL", "DWORD",    "HMODULE", "HANDLE",   "SIZE_T",    "ULONG_PTR", "BYTE*",    "FARPROC", "LONG",     "LPCSTR",                "MAX_PATH",          "MAX_MODULE_NAME32"],
+["CHAR", "BOOL", "DWORD",    "HMODULE", "HANDLE",   "SIZE_T",    "ULONG_PTR", "BYTE*",    "FARPROC",  "LONG",    "LPCSTR",                "MAX_PATH",          "MAX_MODULE_NAME32"],
 ["char", "bool", "uint32_t", "HANDLE",  "uint64_t", "ULONG_PTR", "uint64_t",  "uint64_t", "uint64_t", "uint32_t", "const char*", Kernel32::MAX_PATH , Kernel32::MAX_MODULE_NAME32 ],
 <<<EOC
 // Errhandlingapi.h
@@ -140,10 +179,15 @@ FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName);
 BOOL ReadProcessMemory(HANDLE hProcess, uint64_t lpBaseAddress, void* lpBuffer, SIZE_T nSize, uint64_t lpNumberOfBytesRead);
 BOOL WriteProcessMemory(HANDLE hProcess, uint64_t lpBaseAddress, void* lpBuffer, SIZE_T nSize, uint64_t lpNumberOfBytesWritten);
 uint64_t VirtualAllocEx(HANDLE hProcess, uint64_t lpAddress, SIZE_T dwSize, DWORD flAllocationType, DWORD flProtect);
+BOOL VirtualFreeEx(HANDLE hProcess, uint64_t lpAddress, SIZE_T dwSize, DWORD dwFreeType);
 
 // Processthreadsapi.h
 HANDLE OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId);
 HANDLE CreateRemoteThread(HANDLE hProcess, uint64_t lpThreadAttributes, SIZE_T dwStackSize, uint64_t lpStartAddress, uint64_t lpParameter, DWORD dwCreationFlags, uint64_t lpThreadId);
+BOOL GetExitCodeThread(HANDLE hThread, void* lpExitCode);
+
+// Synchapi.h
+DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
 
 // tlhelp32.h
 typedef struct tagMODULEENTRY32 {
