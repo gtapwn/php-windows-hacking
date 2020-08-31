@@ -24,7 +24,14 @@ class AllocPointer extends Pointer
 	{
 		if(!$this->isNullptr())
 		{
-			Kernel32::VirtualFreeEx($this, $this->alloc_size, Kernel32::MEM_DECOMMIT);
+			try
+			{
+				Kernel32::VirtualFreeEx($this, $this->alloc_size, Kernel32::MEM_DECOMMIT);
+			}
+			catch(Kernel32Exception $ex)
+			{
+				echo $ex->getMessage()."\n".$ex->getTraceAsString()."\n";
+			}
 		}
 	}
 }
