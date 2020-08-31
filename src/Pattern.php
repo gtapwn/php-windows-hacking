@@ -113,7 +113,7 @@ class Pattern
 		$str = "";
 		foreach($this->pattern_arr as $i)
 		{
-			$str .= $i == -1 ? "?" : dechex($i);
+			$str .= $i == -1 ? "?" : strtoupper(str_pad(dechex($i), 2, "0", STR_PAD_LEFT));
 			$str .= " ";
 		}
 		return rtrim($str, " ");
