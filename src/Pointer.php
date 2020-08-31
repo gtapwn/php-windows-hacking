@@ -148,6 +148,11 @@ class Pointer
 		$this->writeString(pack("L", $value));
 	}
 
+	function writeUInt64(int $value) : void
+	{
+		$this->writeString(pack("Q", $value));
+	}
+
 	function writeFloat(float $value) : void
 	{
 		$this->writeString(pack("f", $value));
