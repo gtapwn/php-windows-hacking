@@ -2,7 +2,6 @@
 namespace PWH;
 use FFI;
 use PWH\Handle\ProcessHandle;
-use RuntimeException;
 class Module
 {
 	public ProcessHandle $processHandle;
@@ -55,10 +54,9 @@ class Module
 		return Kernel32::VirtualAllocEx($this->processHandle, $bytes);
 	}
 
-	private function callFunction(int $function_address, ?int $arg_1, ?int $arg_2, int $ret): ?int
+	function callFunction(int $function_address, bool $return_value = false, ?int $arg_1 = null, ?int $arg_2 = null): ?int
 	{
-		$asm = (new AssemblyBuilder())->beginFunction()
-									  ->beginFarCall($function_address);
+		$asm = (new AssemblyBuilder())->beginFunction();
 		if(is_int($arg_1))
 		{
 			$asm->setArgument1($arg_1);
@@ -67,36 +65,27 @@ class Module
 				$asm->setArgument2($arg_2);
 			}
 		}
-		$asm->endFarCall();
-		if($ret != 0)
+		$asm->callFar($function_address);
+		$trailer = (new AssemblyBuilder())->endFunction();
+		if($return_value)
 		{
-			$ExitThread_fp = Kernel32::GetProcAddress(Kernel32::GetModuleHandleA("kernel32.dll"), "ExitThread");
-			if ($ExitThread_fp == Pointer::nullptr)
-			{
-				throw new RuntimeException("Failed to find ExitThread");
-			}
-			if($ret == 1)
-			{
-				$asm->subtractFromReturnValue($this->base->address & 0xFFFFFFFF);
-			}
-			$asm->useReturnValueAsArgument1ToNextCall()
-				->beginFarCall($ExitThread_fp)
-				->endFarCall();
+			$asm->copyRaxToEipOffset(strlen($trailer->getByteCode()));
 		}
-		$asm->endFunction();
+		$asm->append($trailer);
 		$bytecode = $asm->getByteCode();
-		$alloc = $this->allocate(strlen($bytecode));
+		$alloc_size = strlen($bytecode);
+		if($return_value)
+		{
+			$alloc_size += 8;
+		}
+		$alloc = $this->allocate($alloc_size);
 		$alloc->writeString($bytecode);
 		$thread = Kernel32::CreateRemoteThread($this->processHandle, $alloc->address);
 		Kernel32::WaitForSingleObject($thread);
-		if($ret != 0)
-		{
-			$exit_code = FFI::new($ret == 3 ? "int32_t" : "uint32_t");
-			Kernel32::GetExitCodeThread($thread, $exit_code);
-			/** @noinspection PhpUndefinedFieldInspection */
-			return $exit_code->cdata;
-		}
-		return null;
+		//$exit_code = FFI::new("uint32_t");
+		//Kernel32::GetExitCodeThread($thread, $exit_code);
+		//echo "Thread exited with code ".$exit_code->cdata."\n";
+		return $return_value ? $alloc->add(strlen($bytecode))->readUInt64() : null;
 	}
 
 	/**
@@ -109,21 +98,7 @@ class Module
 	 */
 	function callVoidFunction(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null) : void
 	{
-		$this->callFunction($function_address, $arg_1, $arg_2, 0);
-	}
-
-	/**
-	 * Calls a function in the module that accepts 0 to 2 uint64_t-compatible parameters and returns a pointer.
-	 * Note that the resulting pointer should point somewhere between the module base and (modBase + pow(2, 32)) as the method of inter process communication that is the thread exit code can only hold 32 bits.
-	 *
-	 * @param int $function_address
-	 * @param int|null $arg_1
-	 * @param int|null $arg_2
-	 * @return Pointer
-	 */
-	function callPtrFunction(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null) : Pointer
-	{
-		return $this->base->add($this->callFunction($function_address, $arg_1, $arg_2, 1));
+		$this->callFunction($function_address, false, $arg_1, $arg_2);
 	}
 
 	/**
@@ -136,19 +111,32 @@ class Module
 	 */
 	function callUint32Function(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null) : int
 	{
-		return $this->callFunction($function_address, $arg_1, $arg_2, 2);
+		return $this->callFunction($function_address, true, $arg_1, $arg_2) & 0xFFFFFFFF;
 	}
 
 	/**
-	 * Calls a function in the module that accepts 0 to 2 uint64_t-compatible parameters and returns an int32_t.
+	 * Calls a function in the module that accepts 0 to 2 uint64_t-compatible parameters and returns a uint64_t.
 	 *
 	 * @param int $function_address
 	 * @param null|int $arg_1
 	 * @param null|int $arg_2
 	 * @return int
 	 */
-	function callInt32Function(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null) : int
+	function callUInt64Function(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null): int
 	{
-		return $this->callFunction($function_address, $arg_1, $arg_2, 3);
+		return $this->callFunction($function_address, true, $arg_1, $arg_2);
+	}
+
+	/**
+	 * Calls a function in the module that accepts 0 to 2 uint64_t-compatible parameters and returns a pointer.
+	 *
+	 * @param int $function_address
+	 * @param int|null $arg_1
+	 * @param int|null $arg_2
+	 * @return Pointer
+	 */
+	function callPtrFunction(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null) : Pointer
+	{
+		return new Pointer($this->processHandle, $this->callUInt64Function($function_address, $arg_1, $arg_2));
 	}
 }

@@ -22,6 +22,18 @@ class AssemblyBuilder
 		return $bin;
 	}
 
+	function getByteCodeLength() : int
+	{
+		return strlen($this->hex) / 3;
+	}
+
+	function append(AssemblyBuilder $trailer) : AssemblyBuilder
+	{
+		$this->hex .= $trailer->hex;
+		$this->asm .= $trailer->asm;
+		return $this;
+	}
+
 	function __toString() : string
 	{
 		$hex_arr = explode("\n", $this->hex);
@@ -60,7 +72,7 @@ class AssemblyBuilder
 			        ->addInstruction("C3",          "retn");
 	}
 
-	private static function pack($format, int $data) : string
+	static function pack(string $format, int $data) : string
 	{
 		$hex = "";
 		foreach(str_split(pack($format, $data)) as $c)
@@ -68,11 +80,6 @@ class AssemblyBuilder
 			$hex .= " ".str_pad(dechex(ord($c)), 2, "0", STR_PAD_LEFT);
 		}
 		return strtoupper($hex);
-	}
-
-	function beginFarCall(int $function_address) : AssemblyBuilder
-	{
-		return $this->addInstruction("48 B8".self::pack("Q", $function_address), "mov     rax, $function_address ; function address");
 	}
 
 	function setArgument1(int $arg_1) : AssemblyBuilder
@@ -85,18 +92,14 @@ class AssemblyBuilder
 		return $this->addInstruction("48 BA".self::pack("Q", $arg_2), "mov     rdx, $arg_2 ; argument 2");
 	}
 
-	function endFarCall() : AssemblyBuilder
+	function callFar(int $function_address) : AssemblyBuilder
 	{
-		return $this->addInstruction("FF D0", "call    rax");
+		return $this->addInstruction("48 B8".self::pack("Q", $function_address), "mov     rax, $function_address ; function address")
+					->addInstruction("FF D0", "call    rax");
 	}
 
-	function useReturnValueAsArgument1ToNextCall() : AssemblyBuilder
+	function copyRaxToEipOffset(int $offset) : AssemblyBuilder
 	{
-		return $this->addInstruction("89 C1", "mov     ecx, eax ; use return value as argument 1 to next call");
-	}
-
-	function subtractFromReturnValue(int $value) : AssemblyBuilder
-	{
-		return $this->addInstruction("2D".self::pack("l", $value), "sub     eax, $value");
+		return $this->addInstruction("48 89 05".self::pack("l", $offset), "mov     eip+$offset, rax");
 	}
 }
