@@ -11,7 +11,7 @@ class Process
 	 * @param int $desired_access
 	 * @throws RuntimeException if the process isn't open
 	 */
-	function __construct(string $name, int $desired_access = Kernel32::PROCESS_VM_OPERATION | Kernel32::PROCESS_VM_READ | Kernel32::PROCESS_VM_WRITE)
+	function __construct(string $name, int $desired_access = Kernel32::PROCESS_CREATE_THREAD | Kernel32::PROCESS_QUERY_LIMITED_INFORMATION | Kernel32::PROCESS_VM_OPERATION | Kernel32::PROCESS_VM_READ | Kernel32::PROCESS_VM_WRITE | Kernel32::SYNCHRONIZE)
 	{
 		$process_id = self::getProcessId($name);
 		if($process_id == -1)
