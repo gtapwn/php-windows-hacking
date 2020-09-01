@@ -46,7 +46,17 @@ class Process
 		return -1;
 	}
 
-	/** @noinspection PhpUndefinedFieldInspection */
+	/**
+	 * Returns an array of arrays containing:
+	 * - process_id
+	 * - threads
+	 * - parent_process_id
+	 * - priority_class_base
+	 * - exe_file
+	 *
+	 * @return array
+	 * @noinspection PhpUndefinedFieldInspection
+	 */
 	static function getProcessList() : array
 	{
 		$list = [];
@@ -63,7 +73,13 @@ class Process
 		}
 		do
 		{
-			array_push($list, FFI::string($process_entry->szExeFile));
+			array_push($list, [
+				"process_id" => $process_entry->th32ProcessID,
+				"threads" => $process_entry->cntThreads,
+				"parent_process_id" => $process_entry->th32ParentProcessID,
+				"priority_class_base" => $process_entry->pcPriClassBase,
+				"exe_file" => FFI::string($process_entry->szExeFile),
+			]);
 		}
 		while(Kernel32::Process32Next($process_snapshot, $process_entry));
 		return $list;
