@@ -85,14 +85,26 @@ class Kernel32
 		return self::$ffi->GetProcAddress($handle->handle, $func_name);
 	}
 
-	static function ReadProcessMemory(ProcessHandle $processHandle, int $base_address, CData $buffer, int $bytes) : void
+	/**
+	 * @param ProcessHandle $processHandle
+	 * @param Pointer|int $base
+	 * @param CData $buffer
+	 * @param int $bytes
+	 */
+	static function ReadProcessMemory(ProcessHandle $processHandle, $base, CData $buffer, int $bytes) : void
 	{
-		self::$ffi->ReadProcessMemory($processHandle->handle, $base_address, FFI::addr($buffer), $bytes, Pointer::nullptr);
+		self::$ffi->ReadProcessMemory($processHandle->handle, Pointer::addr($base), FFI::addr($buffer), $bytes, Pointer::nullptr);
 	}
 
-	static function WriteProcessMemory(ProcessHandle $processHandle, int $base_address, CData $buffer, int $bytes) : void
+	/**
+	 * @param ProcessHandle $processHandle
+	 * @param Pointer|int $base
+	 * @param CData $buffer
+	 * @param int $bytes
+	 */
+	static function WriteProcessMemory(ProcessHandle $processHandle, $base, CData $buffer, int $bytes) : void
 	{
-		self::$ffi->WriteProcessMemory($processHandle->handle, $base_address, FFI::addr($buffer), $bytes, Pointer::nullptr);
+		self::$ffi->WriteProcessMemory($processHandle->handle, Pointer::addr($base), FFI::addr($buffer), $bytes, Pointer::nullptr);
 	}
 
 	static function VirtualAllocEx(ProcessHandle $processHandle, int $bytes, int $allocation_type = self::MEM_COMMIT | self::MEM_RESERVE, int $protect = self::PAGE_EXECUTE_READWRITE) : AllocPointer
@@ -130,9 +142,15 @@ class Kernel32
 		return $handle;
 	}
 
-	static function CreateRemoteThread(ProcessHandle $processHandle, int $function_address, ?Pointer $parameter = null) : Handle
+	/**
+	 * @param ProcessHandle $processHandle
+	 * @param Pointer|int $function
+	 * @param Pointer|int $parameter
+	 * @return Handle
+	 */
+	static function CreateRemoteThread(ProcessHandle $processHandle, $function, $parameter = Pointer::nullptr) : Handle
 	{
-		$thread_handle = self::$ffi->CreateRemoteThread($processHandle->handle, 0, 0, $function_address, $parameter->address ?? Pointer::nullptr, 0, 0);
+		$thread_handle = self::$ffi->CreateRemoteThread($processHandle->handle, 0, 0, Pointer::addr($function), Pointer::addr($parameter), 0, 0);
 		if($thread_handle == 0)
 		{
 			throw new Kernel32Exception("Failed to create remote thread");

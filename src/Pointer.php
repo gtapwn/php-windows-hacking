@@ -32,6 +32,17 @@ class Pointer
 		return $this->address == Pointer::nullptr;
 	}
 
+	/**
+	 * If the parameter is a Pointer, it returns its address, otherwise, it returns the parameter.
+	 *
+	 * @param mixed $pointer_or_passthrough
+	 * @return mixed
+	 */
+	static function addr($pointer_or_passthrough)
+	{
+		return $pointer_or_passthrough instanceof Pointer ? $pointer_or_passthrough->address : $pointer_or_passthrough;
+	}
+
 	function add(int $offset) : Pointer
 	{
 		return new Pointer($this->processHandle, $this->address + $offset);

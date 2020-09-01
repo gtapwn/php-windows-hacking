@@ -1,5 +1,6 @@
 <?php
 namespace PWH;
+use GMP;
 class AssemblyBuilder
 {
 	private string $hex = "";
@@ -75,24 +76,39 @@ class AssemblyBuilder
 			        ->addInstruction("C3",          "retn");
 	}
 
+	/**
+	 * @param int|string|GMP|Pointer $arg_1
+	 * @return AssemblyBuilder
+	 */
 	function setArgument1($arg_1) : AssemblyBuilder
 	{
+		$arg_1 = Pointer::addr($arg_1);
 		return $this->addInstruction(
 			"48 B9 ".Util::binaryStringToHexString(gmp_export($arg_1, 8)),
 			"mov     rcx, $arg_1 ; argument 1"
 		);
 	}
 
+	/**
+	 * @param int|string|GMP|Pointer $arg_2
+	 * @return AssemblyBuilder
+	 */
 	function setArgument2($arg_2) : AssemblyBuilder
 	{
+		$arg_2 = Pointer::addr($arg_2);
 		return $this->addInstruction(
 			"48 BA ".Util::binaryStringToHexString(gmp_export($arg_2, 8)),
 			"mov     rdx, $arg_2 ; argument 2"
 		);
 	}
 
-	function callFar($function_address) : AssemblyBuilder
+	/**
+	 * @param int|string|GMP|Pointer $function
+	 * @return AssemblyBuilder
+	 */
+	function callFar($function) : AssemblyBuilder
 	{
+		$function_address = Pointer::addr($function);
 		return $this->addInstruction(
 			"48 B8 ".Util::binaryStringToHexString(gmp_export($function_address, 8)),
 			"mov     rax, $function_address ; function address"
