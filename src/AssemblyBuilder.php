@@ -17,7 +17,10 @@ class AssemblyBuilder
 		$bin = "";
 		foreach(explode(" ", str_replace("\n", " ", $this->hex)) as $hex)
 		{
-			$bin .= chr(hexdec($hex));
+			if($hex != "")
+			{
+				$bin .= chr(hexdec($hex));
+			}
 		}
 		return $bin;
 	}
@@ -72,34 +75,32 @@ class AssemblyBuilder
 			        ->addInstruction("C3",          "retn");
 	}
 
-	static function pack(string $format, int $data) : string
+	function setArgument1($arg_1) : AssemblyBuilder
 	{
-		$hex = "";
-		foreach(str_split(pack($format, $data)) as $c)
-		{
-			$hex .= " ".str_pad(dechex(ord($c)), 2, "0", STR_PAD_LEFT);
-		}
-		return strtoupper($hex);
+		return $this->addInstruction(
+			"48 B9 ".Util::binaryStringToHexString(gmp_export($arg_1, 8)),
+			"mov     rcx, $arg_1 ; argument 1"
+		);
 	}
 
-	function setArgument1(int $arg_1) : AssemblyBuilder
+	function setArgument2($arg_2) : AssemblyBuilder
 	{
-		return $this->addInstruction("48 B9".self::pack("Q", $arg_1), "mov     rcx, $arg_1 ; argument 1");
+		return $this->addInstruction(
+			"48 BA ".Util::binaryStringToHexString(gmp_export($arg_2, 8)),
+			"mov     rdx, $arg_2 ; argument 2"
+		);
 	}
 
-	function setArgument2(int $arg_2) : AssemblyBuilder
+	function callFar($function_address) : AssemblyBuilder
 	{
-		return $this->addInstruction("48 BA".self::pack("Q", $arg_2), "mov     rdx, $arg_2 ; argument 2");
-	}
-
-	function callFar(int $function_address) : AssemblyBuilder
-	{
-		return $this->addInstruction("48 B8".self::pack("Q", $function_address), "mov     rax, $function_address ; function address")
-					->addInstruction("FF D0", "call    rax");
+		return $this->addInstruction(
+			"48 B8 ".Util::binaryStringToHexString(gmp_export($function_address, 8)),
+			"mov     rax, $function_address ; function address"
+		)->addInstruction("FF D0", "call    rax");
 	}
 
 	function copyRaxToEipOffset(int $offset) : AssemblyBuilder
 	{
-		return $this->addInstruction("48 89 05".self::pack("l", $offset), "mov     eip+$offset, rax");
+		return $this->addInstruction("48 89 05 ".Util::binaryStringToHexString(pack("l", $offset)), "mov     eip+$offset, rax");
 	}
 }

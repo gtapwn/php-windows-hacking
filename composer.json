@@ -12,6 +12,7 @@
 	"require": {
 		"php": "^7.4",
 		"ext-ffi": "*",
+		"ext-gmp": "*",
 		"ext-json": "*"
 	}
 }

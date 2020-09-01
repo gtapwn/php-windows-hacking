@@ -2,6 +2,7 @@
 namespace PWH;
 use FFI;
 use FFI\CData;
+use GMP;
 use PWH\Handle\ProcessHandle;
 class Pointer
 {
@@ -95,14 +96,19 @@ class Pointer
 		return $this->add($this->readInt32())->add(4);
 	}
 
-	function readUInt64() : int
+	function readInt64() : int
 	{
-		return unpack("Q", $this->readBinary(8))[1];
+		return unpack("q", $this->readBinary(8))[1];
+	}
+
+	function readUInt64() : GMP
+	{
+		return gmp_import($this->readBinary(8), 8);
 	}
 
 	function dereference() : Pointer
 	{
-		return new Pointer($this->processHandle, $this->readUInt64());
+		return new Pointer($this->processHandle, $this->readInt64());
 	}
 
 	function readString() : string
@@ -148,9 +154,17 @@ class Pointer
 		$this->writeString(pack("L", $value));
 	}
 
-	function writeUInt64(int $value) : void
+	function writeInt64(int $value) : void
 	{
-		$this->writeString(pack("Q", $value));
+		$this->writeString(pack("q", $value));
+	}
+
+	/**
+	 * @param int|string|GMP $value
+	 */
+	function writeUInt64($value) : void
+	{
+		$this->writeString(gmp_export($value, 8));
 	}
 
 	function writeFloat(float $value) : void

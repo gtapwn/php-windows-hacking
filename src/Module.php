@@ -1,6 +1,7 @@
 <?php
 namespace PWH;
 use FFI;
+use GMP;
 use PWH\Handle\ProcessHandle;
 class Module
 {
@@ -54,27 +55,27 @@ class Module
 		return Kernel32::VirtualAllocEx($this->processHandle, $bytes);
 	}
 
-	function callFunction(int $function_address, bool $return_value = false, ?int $arg_1 = null, ?int $arg_2 = null): ?int
+	function callFunction($function_address, ?callable $parse_return_func = null, $arg_1 = null, $arg_2 = null)
 	{
 		$asm = (new AssemblyBuilder())->beginFunction();
-		if(is_int($arg_1))
+		if($arg_1 !== null)
 		{
 			$asm->setArgument1($arg_1);
-			if(is_int($arg_2))
+			if($arg_2 !== null)
 			{
 				$asm->setArgument2($arg_2);
 			}
 		}
 		$asm->callFar($function_address);
 		$trailer = (new AssemblyBuilder())->endFunction();
-		if($return_value)
+		if($parse_return_func !== null)
 		{
-			$asm->copyRaxToEipOffset(strlen($trailer->getByteCode()));
+			$asm->copyRaxToEipOffset($trailer->getByteCodeLength());
 		}
 		$asm->append($trailer);
 		$bytecode = $asm->getByteCode();
 		$alloc_size = strlen($bytecode);
-		if($return_value)
+		if($parse_return_func !== null)
 		{
 			$alloc_size += 8;
 		}
@@ -85,58 +86,96 @@ class Module
 		//$exit_code = FFI::new("uint32_t");
 		//Kernel32::GetExitCodeThread($thread, $exit_code);
 		//echo "Thread exited with code ".$exit_code->cdata."\n";
-		return $return_value ? $alloc->add(strlen($bytecode))->readUInt64() : null;
+		return $parse_return_func === null ? null : $parse_return_func($alloc->add(strlen($bytecode)));
 	}
 
 	/**
 	 * Calls a function in the module that accepts 0 to 2 uint64_t-compatible parameters.
 	 *
-	 * @param int $function_address
-	 * @param null|int $arg_1
-	 * @param null|int $arg_2
+	 * @param int|string|GMP $function_address
+	 * @param int|string|GMP|null $arg_1
+	 * @param int|string|GMP|null $arg_2
 	 * @return void
 	 */
-	function callVoidFunction(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null) : void
+	function callVoidFunction($function_address, $arg_1 = null, $arg_2 = null) : void
 	{
-		$this->callFunction($function_address, false, $arg_1, $arg_2);
+		$this->callFunction($function_address, null, $arg_1, $arg_2);
+	}
+
+	/**
+	 * Calls a function in the module that accepts 0 to 2 uint64_t-compatible parameters and returns an int32_t.
+	 *
+	 * @param int|string|GMP $function_address
+	 * @param int|string|GMP|null $arg_1
+	 * @param int|string|GMP|null $arg_2
+	 * @return int
+	 */
+	function callInt32Function($function_address, $arg_1 = null, $arg_2 = null) : int
+	{
+		return $this->callFunction($function_address, function(Pointer $pointer) : int
+		{
+			return $pointer->readInt32();
+		}, $arg_1, $arg_2);
 	}
 
 	/**
 	 * Calls a function in the module that accepts 0 to 2 uint64_t-compatible parameters and returns a uint32_t.
 	 *
-	 * @param int $function_address
-	 * @param null|int $arg_1
-	 * @param null|int $arg_2
+	 * @param int|string|GMP $function_address
+	 * @param int|string|GMP|null $arg_1
+	 * @param int|string|GMP|null $arg_2
 	 * @return int
 	 */
-	function callUint32Function(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null) : int
+	function callUint32Function($function_address, $arg_1 = null, $arg_2 = null) : int
 	{
-		return $this->callFunction($function_address, true, $arg_1, $arg_2) & 0xFFFFFFFF;
+		return $this->callFunction($function_address, function(Pointer $pointer) : int
+		{
+			return $pointer->readUInt32();
+		}, $arg_1, $arg_2);
+	}
+
+	/**
+	 * Calls a function in the module that accepts 0 to 2 uint64_t-compatible parameters and returns an int64_t.
+	 *
+	 * @param int|string|GMP $function_address
+	 * @param int|string|GMP|null $arg_1
+	 * @param int|string|GMP|null $arg_2
+	 * @return int
+	 */
+	function callInt64Function($function_address, $arg_1 = null, $arg_2 = null): int
+	{
+		return $this->callFunction($function_address, function(Pointer $pointer) : int
+		{
+			return $pointer->readInt64();
+		}, $arg_1, $arg_2);
 	}
 
 	/**
 	 * Calls a function in the module that accepts 0 to 2 uint64_t-compatible parameters and returns a uint64_t.
 	 *
-	 * @param int $function_address
-	 * @param null|int $arg_1
-	 * @param null|int $arg_2
-	 * @return int
+	 * @param int|string|GMP $function_address
+	 * @param int|string|GMP|null $arg_1
+	 * @param int|string|GMP|null $arg_2
+	 * @return GMP
 	 */
-	function callUInt64Function(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null): int
+	function callUInt64Function($function_address, $arg_1 = null, $arg_2 = null): GMP
 	{
-		return $this->callFunction($function_address, true, $arg_1, $arg_2);
+		return $this->callFunction($function_address, function(Pointer $pointer) : GMP
+		{
+			return $pointer->readUInt64();
+		}, $arg_1, $arg_2);
 	}
 
 	/**
 	 * Calls a function in the module that accepts 0 to 2 uint64_t-compatible parameters and returns a pointer.
 	 *
-	 * @param int $function_address
-	 * @param int|null $arg_1
-	 * @param int|null $arg_2
+	 * @param int|string|GMP $function_address
+	 * @param int|string|GMP|null $arg_1
+	 * @param int|string|GMP|null $arg_2
 	 * @return Pointer
 	 */
-	function callPtrFunction(int $function_address, ?int $arg_1 = null, ?int $arg_2 = null) : Pointer
+	function callPtrFunction($function_address, $arg_1 = null, $arg_2 = null) : Pointer
 	{
-		return new Pointer($this->processHandle, $this->callUInt64Function($function_address, $arg_1, $arg_2));
+		return new Pointer($this->processHandle, $this->callInt64Function($function_address, $arg_1, $arg_2));
 	}
 }
