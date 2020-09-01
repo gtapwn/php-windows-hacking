@@ -41,6 +41,22 @@ class Kernel32
 
 	static FFI $ffi;
 
+	static function DebugActiveProcess(int $process_id) : void
+	{
+		if(self::$ffi->DebugActiveProcess($process_id) == 0)
+		{
+			throw new Kernel32Exception("DebugActiveProcess call failed");
+		}
+	}
+
+	static function DebugActiveProcessStop(int $process_id) : void
+	{
+		if(self::$ffi->DebugActiveProcessStop($process_id) == 0)
+		{
+			throw new Kernel32Exception("DebugActiveProcessStop call failed");
+		}
+	}
+
 	static function GetLastError() : int
 	{
 		return self::$ffi->GetLastError();
@@ -167,6 +183,10 @@ Kernel32::$ffi = FFI::cdef(str_replace(
 ["CHAR", "BOOL", "DWORD",    "HMODULE", "HANDLE",   "SIZE_T",    "ULONG_PTR", "BYTE*",    "FARPROC",  "LONG",    "LPCSTR",                "MAX_PATH",          "MAX_MODULE_NAME32"],
 ["char", "bool", "uint32_t", "HANDLE",  "uint64_t", "ULONG_PTR", "uint64_t",  "uint64_t", "uint64_t", "uint32_t", "const char*", Kernel32::MAX_PATH , Kernel32::MAX_MODULE_NAME32 ],
 <<<EOC
+// Debugapi.h
+BOOL DebugActiveProcess(DWORD dwProcessId);
+BOOL DebugActiveProcessStop(DWORD dwProcessId);
+
 // Errhandlingapi.h
 DWORD GetLastError();
 
