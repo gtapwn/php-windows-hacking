@@ -16,5 +16,5 @@ if(empty($argv[2]))
 $process = new Process($argv[1], Kernel32::PROCESS_CREATE_THREAD | Kernel32::PROCESS_VM_OPERATION | Kernel32::PROCESS_VM_WRITE);
 $parameter = $process->module->allocate(strlen($argv[2]));
 $parameter->writeString($argv[2]);
-Kernel32::CreateRemoteThread($process->module->processHandle, $LoadLibraryA_fp, $parameter);
+Kernel32::WaitForSingleObject(Kernel32::CreateRemoteThread($process->module->processHandle, $LoadLibraryA_fp, $parameter));
 echo "Successfully injected.\n";
