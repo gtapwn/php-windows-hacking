@@ -46,6 +46,29 @@ class Process
 		return -1;
 	}
 
+	/** @noinspection PhpUndefinedFieldInspection */
+	static function getProcessList() : array
+	{
+		$list = [];
+		$process_snapshot = Kernel32::CreateToolhelp32Snapshot(Kernel32::TH32CS_SNAPPROCESS, 0);
+		if(!$process_snapshot->isValid())
+		{
+			throw new Kernel32Exception("Failed to get process snapshot");
+		}
+		$process_entry = Kernel32::$ffi->new("PROCESSENTRY32");
+		$process_entry->dwSize = FFI::sizeof($process_entry);
+		if(!Kernel32::Process32First($process_snapshot, $process_entry))
+		{
+			throw new Kernel32Exception("Failed to get process list");
+		}
+		do
+		{
+			array_push($list, FFI::string($process_entry->szExeFile));
+		}
+		while(Kernel32::Process32Next($process_snapshot, $process_entry));
+		return $list;
+	}
+
 	function getModule(string $module) : Module
 	{
 		return $module == $this->module->name ? $this->module : new Module($this->module->processHandle, $module);
